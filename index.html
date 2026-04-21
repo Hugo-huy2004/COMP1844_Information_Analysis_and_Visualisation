@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Metro Coordinate Extractor for Proplay Hub</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f8fafc;
+            color: #020618;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        #canvas-container {
+            position: relative;
+            border: 2px solid #ec003f;
+            display: inline-block;
+            margin-top: 10px;
+            cursor: crosshair;
+            background-color: #fff;
+            border-radius: 0.375rem;
+            overflow: auto;
+            max-width: 100%;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 0.375rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            background-color: #ec003f;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            margin-top: 10px;
+            border-radius: 0.375rem;
+            border: 1px solid #ccc;
+            padding: 10px;
+            font-family: monospace;
+        }
+
+        .log {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h2>Metro Coordinate Mapper</h2>
+
+        <div class="controls">
+            <input type="file" id="upload" accept="image/*">
+            <button onclick="exportPos()">Export POS = {}</button>
+            <button onclick="clearAll()" style="background-color: #64748b;">Clear All</button>
+            <div class="log" id="status">Please select a map image to start.</div>
+        </div>
+
+        <div id="canvas-container">
+            <canvas id="mapCanvas"></canvas>
+        </div>
+
+        <h3>Python Format Result:</h3>
+        <textarea id="output" readonly placeholder="Coordinates will appear here..."></textarea>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+        const upload = document.getElementById('upload');
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
+
+        let img = new Image();
+        let points = []; // Store {name: string, x: number, y: number}
+
+        // Upload image
+        upload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    draw();
+                    status.innerText = `Image loaded (${img.width}x${img.height}). Click on the map to mark points.`;
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Handle mouse click
+        canvas.addEventListener('mousedown', (e) => {
+            if (!img.src) return;
+
+            const rect = canvas.getBoundingClientRect();
+            // Get standard coordinates according to real image size
+            const x = Math.round(e.clientX - rect.left);
+            const y = Math.round(e.clientY - rect.top);
+
+            // Show prompt to enter station name
+            const stationName = prompt(`Coordinates: (${x}, ${y})\nEnter station name:`);
+
+            if (stationName) {
+                // Save y coordinate as negative to match typical NetworkX/Matplotlib (y points up)
+                // If you want positive y, just use y. Here I use negative y following your example.
+                points.push({ name: stationName, x: x, y: -y });
+                draw();
+                updateRealtimeLog(stationName, x, -y);
+            }
+        });
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+
+            points.forEach(p => {
+                // Draw point
+                ctx.beginPath();
+                ctx.arc(p.x, -p.y, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ec003f';
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+
+                // Draw station name
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillStyle = '#020618';
+                ctx.fillText(p.name, p.x + 10, -p.y + 5);
+            });
+        }
+
+        function updateRealtimeLog(name, x, y) {
+            status.innerText = `Newly added: ${name} (${x}, ${y})`;
+        }
+
+        function exportPos() {
+            if (points.length === 0) {
+                alert("No data to export!");
+                return;
+            }
+
+            let res = "pos = {\n";
+            points.forEach((p, index) => {
+                res += `    "${p.name}": (${p.x}, ${p.y})${index === points.length - 1 ? "" : ","}\n`;
+            });
+            res += "}";
+            output.value = res;
+            output.select(); // Automatically select for copying
+        }
+
+        function clearAll() {
+            if (confirm("Are you sure you want to clear all points?")) {
+                points = [];
+                draw();
+                output.value = "";
+            }
+        }
+    </script>
+
+</body>
+
+</html>
